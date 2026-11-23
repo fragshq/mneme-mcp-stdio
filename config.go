@@ -12,7 +12,8 @@ import (
 )
 
 // version is the server's version, reported by --version and to MCP clients.
-const version = "0.1.0"
+// Release builds set it from the git tag with -ldflags "-X main.version=...".
+var version = "0.1.0"
 
 // Every setting is a flag and an environment variable: the flag name
 // upper-cased, with dashes as underscores, after envPrefix (--pg-dsn is
