@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"mneme-mcp-stdio/internal/webserver"
+	"github.com/fragshq/mneme-mcp/stdio/internal/webserver"
 )
 
 // defaultDashboardAddr is where --dashboard=on listens: loopback only,

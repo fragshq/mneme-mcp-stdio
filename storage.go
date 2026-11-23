@@ -13,7 +13,7 @@ import (
 
 	"github.com/fragshq/mneme"
 
-	"mneme-mcp-stdio/internal/webserver"
+	"github.com/fragshq/mneme-mcp/stdio/internal/webserver"
 
 	memorystore "github.com/fragshq/mneme-plugins/mneme-memory-storage"
 	pgstore "github.com/fragshq/mneme-plugins/mneme-postgres-storage"

@@ -1,4 +1,4 @@
-module mneme-mcp-stdio
+module github.com/fragshq/mneme-mcp/stdio
 
 go 1.26.0
 

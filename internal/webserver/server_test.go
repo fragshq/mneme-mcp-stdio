@@ -18,7 +18,7 @@ import (
 	"github.com/fragshq/mneme/schema"
 	"github.com/fragshq/mneme/store/memstore"
 
-	"mneme-mcp-stdio/internal/webserver"
+	"github.com/fragshq/mneme-mcp/stdio/internal/webserver"
 )
 
 // fakeTenants serves one memstore engine per tenant name.

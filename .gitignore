@@ -1,5 +1,6 @@
 # Build output
 /mneme-mcp-stdio
+/stdio
 *.exe
 *.exe~
 *.dll
