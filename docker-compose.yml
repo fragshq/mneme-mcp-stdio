@@ -1,0 +1,43 @@
+# Local databases for the mneme-mcp-stdio workbench.
+#
+#   docker compose up -d --wait   # start, returning once both are healthy
+#   docker compose down       # stop, keep data
+#   docker compose down -v    # stop and wipe data
+#
+# Host ports are deliberately unusual (47432, 46379) so they don't collide
+# with other projects on the default 5432 / 6379.
+name: mneme-workbench
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: mneme
+      POSTGRES_PASSWORD: mneme
+      POSTGRES_DB: mneme
+    ports:
+      - "127.0.0.1:47432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mneme -d mneme"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:46379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  postgres-data:
+  redis-data:

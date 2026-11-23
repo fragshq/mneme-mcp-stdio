@@ -1,0 +1,525 @@
+openapi: 3.0.3
+info:
+  title: Mneme workbench dashboard API
+  version: 0.1.0
+  description: |
+    The JSON API behind the workbench's web dashboard. It browses every tenant
+    of the configured storage (the default, non-tenant space included), their
+    record types and records, and inserts, updates and deletes records.
+
+    Every operation on a tenant's data takes an optional `tenant` query
+    parameter. Omitted or empty, it addresses the default space: the data a
+    server without MNEME_TENANT works on.
+
+    Record types can be defined (each call adds a version), checked without
+    storing anything, and deleted with all their data.
+
+    Errors are an `Error` object. Input problems are 400 (a record failing its
+    schema lists its `issues`), unknown record types or records 404, and
+    conflicts 409.
+servers:
+  - url: /api
+
+paths:
+  /tenants:
+    get:
+      operationId: listTenants
+      summary: List the tenants holding record types, and the one this server serves.
+      responses:
+        "200":
+          description: Tenants, the default space ("") first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantList"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types:
+    get:
+      operationId: listRecordTypes
+      summary: List a tenant's record types, with their latest version.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+      responses:
+        "200":
+          description: Record types, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecordTypeSummary"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: defineRecordType
+      summary: Define a record type, or a new version of an existing one.
+      description: |
+        Each call stores a new version (the latest + 1); existing records keep
+        the version they were written with. It takes the complete definition,
+        not a patch.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefinitionInput"
+      responses:
+        "201":
+          description: The stored version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Definition"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types/validate:
+    post:
+      operationId: validateRecordType
+      summary: Check a definition (name, schema, ID strategy) without storing it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DefinitionInput"
+      responses:
+        "200":
+          description: The definition is valid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Validation"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types/{name}:
+    delete:
+      operationId: deleteRecordType
+      summary: Delete a record type permanently, with every version, record and ID counter.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+        - $ref: "#/components/parameters/Name"
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Error"
+    get:
+      operationId: getRecordType
+      summary: Get a record type version, its versions, and its fields across versions.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+        - $ref: "#/components/parameters/Name"
+        - name: version
+          in: query
+          description: A specific version; omitted or 0 for the latest.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: The record type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordTypeDetails"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types/{name}/records:
+    get:
+      operationId: listRecords
+      summary: List a page of records, filtered and sorted across schema versions.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+        - $ref: "#/components/parameters/Name"
+        - $ref: "#/components/parameters/Filter"
+        - name: sort
+          in: query
+          description: Comma-separated fields, each optionally prefixed with "-" for descending (e.g. "-$updatedAt,name"). Default creation order.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Page size (default 50).
+          schema:
+            type: integer
+            minimum: 1
+        - name: cursor
+          in: query
+          description: nextCursor from the previous page, with the same filter and sort.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordPage"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: insertRecord
+      summary: Insert a record, validated against the latest schema version.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+        - $ref: "#/components/parameters/Name"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordInput"
+      responses:
+        "201":
+          description: The stored record, with its generated ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types/{name}/records/{id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantParam"
+      - $ref: "#/components/parameters/Name"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getRecord
+      summary: Get one record.
+      responses:
+        "200":
+          description: The record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+        default:
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateRecord
+      summary: Replace a record's data and labels (full replace, against the latest schema version).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordInput"
+      responses:
+        "200":
+          description: The updated record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteRecord
+      summary: Delete a record permanently.
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Error"
+
+  /record-types/{name}/labels:
+    get:
+      operationId: listLabels
+      summary: List the distinct labels of the matching records, with their counts.
+      parameters:
+        - $ref: "#/components/parameters/TenantParam"
+        - $ref: "#/components/parameters/Name"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: Labels, in byte order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LabelCount"
+        default:
+          $ref: "#/components/responses/Error"
+
+components:
+  parameters:
+    TenantParam:
+      name: tenant
+      in: query
+      description: The tenant; omitted or empty for the default space.
+      schema:
+        type: string
+    Name:
+      name: name
+      in: path
+      required: true
+      description: Record type name.
+      schema:
+        type: string
+    Filter:
+      name: filter
+      in: query
+      description: A Mneme filter as JSON, e.g. {"op":"eq","field":"status","value":"open"}.
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: An error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        issues:
+          description: Where a record failed its schema.
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+
+    Issue:
+      type: object
+      required: [path, message]
+      properties:
+        path:
+          description: JSON pointer into the record data ("" for the root).
+          type: string
+        message:
+          type: string
+
+    TenantList:
+      type: object
+      required: [tenants]
+      properties:
+        tenants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tenant"
+
+    Tenant:
+      type: object
+      required: [name, current]
+      properties:
+        name:
+          description: The tenant; "" is the default space.
+          type: string
+        current:
+          description: Whether this is the tenant the MCP server works on.
+          type: boolean
+
+    RecordTypeSummary:
+      type: object
+      required: [name, latestVersion, title, description]
+      properties:
+        name:
+          type: string
+        latestVersion:
+          type: integer
+          x-go-name: Version
+        title:
+          type: string
+        description:
+          type: string
+
+    RecordTypeDetails:
+      type: object
+      required: [definition, versions, fields]
+      properties:
+        definition:
+          $ref: "#/components/schemas/Definition"
+        versions:
+          type: array
+          items:
+            type: integer
+        fields:
+          description: Fields across every version; required only if every version requires them.
+          type: array
+          items:
+            $ref: "#/components/schemas/Field"
+
+    Definition:
+      type: object
+      required: [name, version, title, description, idStrategy, indexes, schema, createdAt]
+      properties:
+        name:
+          type: string
+        version:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        idStrategy:
+          description: The ID strategy; null means the default (UUIDv7).
+          type: object
+          nullable: true
+          additionalProperties: true
+          x-go-name: IDStrategy
+          x-go-type: "*idgen.Spec"
+          x-go-type-import:
+            path: github.com/fragshq/mneme/idgen
+        indexes:
+          type: array
+          items:
+            type: string
+        schema:
+          description: The JSON Schema records are validated against.
+          type: object
+          additionalProperties: true
+          x-go-type: "*schema.JSONSchema"
+          x-go-type-import:
+            path: github.com/fragshq/mneme/schema
+        createdAt:
+          type: string
+          format: date-time
+
+    DefinitionInput:
+      type: object
+      required: [name, schema]
+      properties:
+        name:
+          description: Lowercase letters, digits, "_" or "-", starting with a letter.
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        schema:
+          description: The JSON Schema (draft 2020-12); its root must be an object schema.
+          type: object
+          additionalProperties: true
+          x-go-type: "*schema.JSONSchema"
+          x-go-type-import:
+            path: github.com/fragshq/mneme/schema
+        idStrategy:
+          description: The ID strategy, {"segments":[...]}; omitted or null for the default (UUIDv7).
+          type: object
+          nullable: true
+          additionalProperties: true
+          x-go-name: IDStrategy
+          x-go-type: "*idgen.Spec"
+          x-go-type-import:
+            path: github.com/fragshq/mneme/idgen
+        indexes:
+          type: array
+          items:
+            type: string
+
+    Validation:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+
+    Field:
+      type: object
+      required: [path, types, description, required, versions]
+      properties:
+        path:
+          type: string
+        types:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        required:
+          type: boolean
+        versions:
+          type: array
+          items:
+            type: integer
+
+    Record:
+      type: object
+      required: [recordType, id, schemaVersion, data, createdAt, updatedAt, labels]
+      properties:
+        recordType:
+          type: string
+        id:
+          type: string
+          x-go-name: ID
+        schemaVersion:
+          type: integer
+        data:
+          type: object
+          additionalProperties: true
+          # encoding/json is already imported by the generated code.
+          x-go-type: json.RawMessage
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        labels:
+          type: array
+          items:
+            type: string
+
+    RecordPage:
+      type: object
+      required: [items, limit, total, hasMore, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Record"
+        limit:
+          description: The page size applied (the default when none was asked, capped at the maximum).
+          type: integer
+        total:
+          description: How many records match the filter across all pages.
+          type: integer
+        hasMore:
+          description: Whether more records follow; nextCursor is then set.
+          type: boolean
+        nextCursor:
+          description: Pass back as cursor for the next page; "" when there is none.
+          type: string
+
+    RecordInput:
+      type: object
+      required: [data]
+      properties:
+        data:
+          description: The complete record; it must conform to the latest schema version.
+          type: object
+          additionalProperties: true
+          # encoding/json is already imported by the generated code.
+          x-go-type: json.RawMessage
+        labels:
+          description: The complete set of labels (labels left out are removed on update).
+          type: array
+          items:
+            type: string
+
+    LabelCount:
+      type: object
+      required: [label, count]
+      properties:
+        label:
+          type: string
+        count:
+          type: integer

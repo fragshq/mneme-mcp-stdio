@@ -1,0 +1,10 @@
+# Generates api.gen.go from the design-first spec: go generate ./...
+package: webserver
+output: api.gen.go
+generate:
+  models: true
+  echo-server: true
+output-options:
+  # Optional fields and parameters are plain values: no handler needs to
+  # tell an absent value from its zero value.
+  prefer-skip-optional-pointer: true
