@@ -276,7 +276,8 @@ spec/openapi.yaml      the dashboard API, designed first
 internal/webserver/    Echo server: api.gen.go (generated), server.go (handlers),
                        convert.go (edjson converters), ui/ (embedded HTML/JS/CSS)
 Dockerfile             the container image (multi-arch, distroless)
-.github/workflows/     release.yml: on a v* tag, tests, then release binaries and the GHCR image
+.github/workflows/     test.yml: vet and test every pull request and push to main, Postgres included
+                       release.yml: on a v* tag, test.yml, then release binaries and the GHCR image
 ```
 
 The dashboard API is design-first: edit `spec/openapi.yaml`, then regenerate `internal/webserver/api.gen.go` with oapi-codegen, which is pinned as a Go tool in `go.mod`:

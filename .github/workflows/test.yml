@@ -1,0 +1,56 @@
+# Vets and tests every pull request (opened, updated, reopened) and every push
+# to main. release.yml calls it too, before building anything.
+#
+# A Postgres service runs alongside, so the two Postgres backends are tested
+# as well as memory and Redis (miniredis); without MNEME_PG_DSN they'd skip.
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request or branch cancels the older run.
+concurrency:
+  group: test-${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The fragshq modules are private: fetch them straight from GitHub, not
+  # through the public module proxy or checksum database.
+  GOPRIVATE: github.com/fragshq/*
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mneme
+          POSTGRES_PASSWORD: mneme
+          POSTGRES_DB: mneme
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mneme -d mneme"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      MNEME_PG_DSN: postgres://mneme:mneme@localhost:5432/mneme?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Authenticate to private fragshq modules
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: git config --global url."https://x-access-token:${TOKEN}@github.com/fragshq/".insteadOf "https://github.com/fragshq/"
+      - run: go vet ./...
+      - run: go test -v ./...
