@@ -149,6 +149,98 @@ For example Claude Desktop: add an entry to `mcpServers`, with the settings in `
 
 For Redis, use `"args": ["--storage", "redis", "--redis-addr", "localhost:46379"]` instead. For a throwaway session with no database at all, use `"args": ["--storage", "memory"]`.
 
+### Docker
+
+Each version tag also publishes a container image for `linux/amd64` and `linux/arm64`, so you don't need Go or a downloaded binary:
+
+```
+ghcr.io/fragshq/mneme-mcp-stdio:latest     # newest release
+ghcr.io/fragshq/mneme-mcp-stdio:0.2.0      # a given version (also 0.2, and 1 from v1 on)
+```
+
+If the package is private, log in first with a GitHub token that has `read:packages`: `echo $TOKEN | docker login ghcr.io -u <user> --password-stdin`.
+
+The image's entrypoint is the server itself, so it takes the same flags and `MNEME_*` variables as the binary (pass variables with `-e`). The server speaks MCP over stdio, so the MCP client starts the container itself, the same way it would start the binary:
+
+- **`-i`** keeps stdin open. MCP requests come in on it.
+- **`--rm`** removes the container when the client disconnects.
+- **No `-t`**. A TTY would mangle the protocol on stdout.
+
+#### With the compose databases
+
+From inside a container, `localhost` is the container itself, not your machine. So the server joins the compose stack's network, `mneme-workbench_default` (declared at the bottom of `docker-compose.yml`), and reaches the databases by service name on their **internal** ports, `redis:6379` and `postgres:5432`. The host ports 46379 and 47432 aren't used here.
+
+```sh
+docker compose up -d --wait
+
+# Redis
+claude mcp add mneme -- docker run -i --rm --network mneme-workbench_default \
+  ghcr.io/fragshq/mneme-mcp-stdio:latest \
+  --storage redis --redis-addr redis:6379
+
+# Postgres, every record type in one table
+claude mcp add mneme -- docker run -i --rm --network mneme-workbench_default \
+  ghcr.io/fragshq/mneme-mcp-stdio:latest \
+  --storage postgres-shared \
+  --pg-dsn 'postgres://mneme:mneme@postgres:5432/mneme?sslmode=disable'
+
+# Postgres, one table per record type
+claude mcp add mneme -- docker run -i --rm --network mneme-workbench_default \
+  ghcr.io/fragshq/mneme-mcp-stdio:latest \
+  --storage postgres-per-type \
+  --pg-dsn 'postgres://mneme:mneme@postgres:5432/mneme?sslmode=disable'
+
+# Memory: no database, no network
+claude mcp add mneme -- docker run -i --rm ghcr.io/fragshq/mneme-mcp-stdio:latest --storage memory
+```
+
+Everything else works as it does for the binary. Add `--tenant acme` for a tenant, or use `-e MNEME_STORAGE=memory` in place of the flag. The data lands in the same compose volumes, so [Inspect the data](#inspect-the-data) works unchanged, and so does switching between the binary and the image.
+
+For Claude Desktop and other clients, the command is `docker`:
+
+```json
+"mneme": {
+  "command": "docker",
+  "args": [
+    "run", "-i", "--rm", "--network", "mneme-workbench_default",
+    "ghcr.io/fragshq/mneme-mcp-stdio:latest",
+    "--storage", "redis", "--redis-addr", "redis:6379"
+  ]
+}
+```
+
+#### With databases on the host
+
+For a Redis or Postgres that runs on your machine but outside the compose stack, use `host.docker.internal` in place of `localhost`, for example `--redis-addr host.docker.internal:6379`. Docker Desktop (macOS, Windows) resolves that name by itself. On Linux, also pass `--add-host=host.docker.internal:host-gateway` to `docker run`.
+
+#### Dashboard
+
+Inside a container, the dashboard's default address `127.0.0.1:47080` can only be reached from within that container. Make it listen on all of the container's interfaces, and publish the port on your machine's loopback only:
+
+```sh
+claude mcp add mneme -- docker run -i --rm --network mneme-workbench_default \
+  -p 127.0.0.1:47080:47080 \
+  ghcr.io/fragshq/mneme-mcp-stdio:latest \
+  --storage redis --redis-addr redis:6379 --dashboard 0.0.0.0:47080
+```
+
+Then open `http://127.0.0.1:47080/`. Because the port is published on `127.0.0.1`, nothing beyond your machine can reach it. Two caveats:
+
+- The server logs its warning about a non-loopback address, because from inside the container it is one.
+- For the same reason, it skips the host-name check that blocks DNS rebinding.
+
+Publish on `127.0.0.1` only, never a bare `-p 47080:47080`. Only one registration can publish the port at a time.
+
+#### Build the image yourself
+
+The fragshq modules are private, so the build needs a GitHub token that can read them. It goes in as a BuildKit secret and is never stored in the image:
+
+```sh
+GH_TOKEN=... docker build --secret id=gh_token,env=GH_TOKEN --build-arg VERSION=dev -t mneme-mcp-stdio .
+```
+
+Then use `mneme-mcp-stdio` in place of `ghcr.io/fragshq/mneme-mcp-stdio:latest` in the commands above.
+
 ### Dashboard
 
 Pass `--dashboard` (or set `MNEME_DASHBOARD=on`) and the server also serves a web dashboard at `http://127.0.0.1:47080/` (or pass `--dashboard=127.0.0.1:9000` for another port). It's plain HTML, JS and CSS embedded in the binary, so there's nothing else to install or run.
@@ -183,6 +275,8 @@ dashboard.go           --dashboard and the HTTP listener
 spec/openapi.yaml      the dashboard API, designed first
 internal/webserver/    Echo server: api.gen.go (generated), server.go (handlers),
                        convert.go (edjson converters), ui/ (embedded HTML/JS/CSS)
+Dockerfile             the container image (multi-arch, distroless)
+.github/workflows/     release.yml: on a v* tag, tests, then release binaries and the GHCR image
 ```
 
 The dashboard API is design-first: edit `spec/openapi.yaml`, then regenerate `internal/webserver/api.gen.go` with oapi-codegen, which is pinned as a Go tool in `go.mod`:

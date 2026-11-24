@@ -41,3 +41,10 @@ services:
 volumes:
   postgres-data:
   redis-data:
+
+# Every service joins this network by default. Its name is fixed, so the
+# server's container image can join it too and reach the databases as
+# redis:6379 and postgres:5432 (see "Docker" in the README).
+networks:
+  default:
+    name: mneme-workbench_default
