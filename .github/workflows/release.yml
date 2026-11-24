@@ -13,15 +13,11 @@ permissions:
 
 env:
   BINARY: mneme-mcp-stdio
-  # The fragshq modules are private: fetch them straight from GitHub, not
-  # through the public module proxy or checksum database.
-  GOPRIVATE: github.com/fragshq/*
 
 jobs:
   # The same vet and tests as every pull request, Postgres included.
   test:
     uses: ./.github/workflows/test.yml
-    secrets: inherit
 
   build:
     needs: test
@@ -41,11 +37,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Authenticate to private fragshq modules
-        env:
-          TOKEN: ${{ secrets.TOKEN }}
-        run: git config --global url."https://x-access-token:${TOKEN}@github.com/fragshq/".insteadOf "https://github.com/fragshq/"
-
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -107,7 +98,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ github.ref_name }}
-          secrets: gh_token=${{ secrets.TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true

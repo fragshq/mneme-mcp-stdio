@@ -158,8 +158,6 @@ ghcr.io/fragshq/mneme-mcp-stdio:latest     # newest release
 ghcr.io/fragshq/mneme-mcp-stdio:0.2.0      # a given version (also 0.2, and 1 from v1 on)
 ```
 
-If the package is private, log in first with a GitHub token that has `read:packages`: `echo $TOKEN | docker login ghcr.io -u <user> --password-stdin`.
-
 The image's entrypoint is the server itself, so it takes the same flags and `MNEME_*` variables as the binary (pass variables with `-e`). The server speaks MCP over stdio, so the MCP client starts the container itself, the same way it would start the binary:
 
 - **`-i`** keeps stdin open. MCP requests come in on it.
@@ -233,10 +231,8 @@ Publish on `127.0.0.1` only, never a bare `-p 47080:47080`. Only one registratio
 
 #### Build the image yourself
 
-The fragshq modules are private, so the build needs a GitHub token that can read them. It goes in as a BuildKit secret and is never stored in the image:
-
 ```sh
-GH_TOKEN=... docker build --secret id=gh_token,env=GH_TOKEN --build-arg VERSION=dev -t mneme-mcp-stdio .
+docker build --build-arg VERSION=dev -t mneme-mcp-stdio .
 ```
 
 Then use `mneme-mcp-stdio` in place of `ghcr.io/fragshq/mneme-mcp-stdio:latest` in the commands above.

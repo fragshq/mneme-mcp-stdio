@@ -19,11 +19,6 @@ concurrency:
   group: test-${{ github.workflow_ref }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  # The fragshq modules are private: fetch them straight from GitHub, not
-  # through the public module proxy or checksum database.
-  GOPRIVATE: github.com/fragshq/*
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -48,9 +43,5 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Authenticate to private fragshq modules
-        env:
-          TOKEN: ${{ secrets.TOKEN }}
-        run: git config --global url."https://x-access-token:${TOKEN}@github.com/fragshq/".insteadOf "https://github.com/fragshq/"
       - run: go vet ./...
       - run: go test -v ./...

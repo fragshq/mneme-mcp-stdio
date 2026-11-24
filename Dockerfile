@@ -5,31 +5,20 @@
 #
 #   docker run -i --rm ghcr.io/fragshq/mneme-mcp-stdio --storage memory
 #
-# The fragshq modules are private, so building needs a GitHub token with read
-# access to them, passed as a BuildKit secret (it never lands in a layer):
+# To build it yourself:
 #
-#   docker build --secret id=gh_token,env=GH_TOKEN --build-arg VERSION=dev \
-#     -t mneme-mcp-stdio .
+#   docker build --build-arg VERSION=dev -t mneme-mcp-stdio .
 
 # Go cross-compiles for the target platform, so multi-arch builds need no
 # emulation.
 FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 ARG TARGETOS TARGETARCH
 ARG VERSION=dev
-ENV GOPRIVATE=github.com/fragshq/* \
-    CGO_ENABLED=0
+ENV CGO_ENABLED=0
 WORKDIR /src
 
 COPY go.mod go.sum ./
-# The token goes into a throwaway git config that is deleted in the same step.
-RUN --mount=type=secret,id=gh_token \
-    --mount=type=cache,target=/go/pkg/mod \
-    export GIT_CONFIG_GLOBAL=/tmp/gitconfig && \
-    if [ -s /run/secrets/gh_token ]; then \
-      git config --global url."https://x-access-token:$(cat /run/secrets/gh_token)@github.com/fragshq/".insteadOf "https://github.com/fragshq/"; \
-    fi && \
-    go mod download && \
-    rm -f /tmp/gitconfig
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
